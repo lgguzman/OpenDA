@@ -62,6 +62,11 @@ public abstract class AbstractSequentialEnsembleAlgorithm extends AbstractSequen
 	protected enum LocalizationMethodType{none,hamill,autoZhang}
 	protected LocalizationMethodType localizationMethod=LocalizationMethodType.none;
 	protected double distance;
+	
+	
+	// Shrinkage covariance
+	protected enum SKMethodType{none,RBLW,OAS, LW}
+	protected SKMethodType SKMethod=SKMethodType.none; 
 
 	//Smoothed gain matrix
 	protected double timeRegularisationPerDay = 0.0;
@@ -92,6 +97,29 @@ public abstract class AbstractSequentialEnsembleAlgorithm extends AbstractSequen
 		else {
 			throw new RuntimeException("Configured localization type '" + localization +  "' is not supported");
 		}
+		
+		
+		String sK = this.configurationAsTree.getAsString("covarianceEstimator","traditional");
+		System.out.println("Selected Shrinkage Estimator method:"+sK);
+			
+		if ( sK.equalsIgnoreCase("traditional") ) {
+			this.SKMethod = SKMethodType.none;
+		}
+		else if (sK.equalsIgnoreCase("rblw")){
+		   this.SKMethod = SKMethodType.RBLW; 
+		}
+		else if (sK.equalsIgnoreCase("oas")){
+				this.SKMethod = SKMethodType.OAS;
+		}
+		else if (sK.equalsIgnoreCase("lw")){
+			this.SKMethod = SKMethodType.LW;
+		}
+		else {
+			throw new RuntimeException("Shrinkage covariance estimator type '" + sK +  "' is not supported");
+		}
+		
+		
+		
 		this.timeRegularisationPerDay= this.configurationAsTree.getAsDouble("gainMatrixSmoother@timeRegularisationPerDay",0.0);
 		Results.putMessage("this.ensembleSize="+this.ensembleSize);
         if (this.ensembleSize < 2) throw new RuntimeException("Found ensemble size " + this.ensembleSize + ". This value must be at least 2.");

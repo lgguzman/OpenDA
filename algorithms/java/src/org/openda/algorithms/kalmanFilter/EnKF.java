@@ -180,7 +180,7 @@ public class EnKF extends AbstractSequentialEnsembleAlgorithm {
 	 	ensVectors.ensemble = new IVector[this.ensembleSize];
 		timerGetObs.start();
 		for (int i = 0; i < this.ensembleSize; i++) {
-			// collect ensemble
+			// collect ensemble 
 			ensVectors.ensemble[i] = this.ensemble[i].getObservationOperator().getObservedValues(observationDescriptions);
 		}
 		timerGetObs.stop();
@@ -355,6 +355,53 @@ public class EnKF extends AbstractSequentialEnsembleAlgorithm {
 		return computeGainMatrix(obs, ensemblePredictions, ensembleVectors, true, true);
 	}
 
+	protected void applyShrinkageToCovariance(EnsembleVectors ensembleVectors,Matrix predMat, Matrix D ,double [] alphaU , int n, int q, int m, double sqrtQmin1){
+    	Matrix delta =  (new Matrix(ensembleVectors.ensemble));
+		delta.scale(1/sqrtQmin1);
+		Matrix[] SVD = delta.svd();
+		double S2 = 0.0;
+		double S = 0.0;
+		for	(int i=0;i< Math.min(SVD[1].getNumberOfRows(),SVD[1].getNumberOfColumns());i++) {
+			double tempS =  SVD[1].getValue(i, i)* SVD[1].getValue(i, i);
+			S = S + tempS;
+			tempS =  tempS* tempS;
+			S2 = S2 + tempS;
+		}
+
+		alphaU[1] = Math.max(0.15,(1+S)/n);
+
+		switch (this.SKMethod){
+			case OAS:{
+				alphaU[0] = Math.min(((1 - 2 / n) * S2 + S * S) / ((q + 1 - 2 / n) * (S2 - (S * S) / n)), 1);
+				break;
+			}
+			case LW:{
+				break;
+			}
+			case RBLW:{
+				alphaU[0] = Math.min((((q-2)/q)*S2+ S*S)/((q+2)*(S2-(S*S)/n)), 1);
+				break;
+			}
+		}
+		predMat.scale(Math.sqrt((1.0-alphaU[0]) / (q - 1.0)));
+		D.multiply(1.0,  predMat  , predMat, 0.0, false, true);
+		for	(int i=0;i<m;i++) {
+			D.setValue(i, i, D.getValue(i, i)+ alphaU[0]*alphaU[1]);
+		}
+	}
+
+	protected  void updateVectorKGainShrinkage(IStochObserver obs, IVector[] Kvecs, Matrix inverseD  ,double [] alphaU ,int i, int m ){
+		IObservationDescriptions  descr = obs.getObservationDescriptions() ;
+		IVector obsIndex = descr.getValueProperties("index");
+		if(obsIndex==null){
+			obsIndex = descr.getValueProperties("xPosition");
+		}
+		for(int j=0;j<m;j++) {
+			int indx = (int) obsIndex.getValue(j);
+			Kvecs[i].setValue(indx, Kvecs[i].getValue(indx) + alphaU[0] * alphaU[1] * inverseD.getValue(j, i));
+		}
+	}
+
 	protected IVector[] computeGainMatrix(IStochObserver obs, EnsembleVectors ensemblePredictions, EnsembleVectors ensembleVectors, boolean compute_pred_a_linear, boolean write_output){
 		int m = obs.getCount(); // number of observations
 		int n = ensembleVectors.mean.getSize(); // length of the state vector
@@ -367,11 +414,21 @@ public class EnKF extends AbstractSequentialEnsembleAlgorithm {
 		// innovations
 		timerLinalg.start();
 		//H*A^f_k = predMat = prediction of the observed model values, after removing the mean.
-		Matrix predMat = new Matrix(ensemblePredictions.ensemble);
-		predMat.scale(Math.sqrt(1.0 / (q - 1.0)));
-		// System.out.println("predMat="+predMat);
+		Matrix predMat = new Matrix(ensemblePredictions.ensemble);	
 		Matrix D = new Matrix(m, m);
-		D.multiply(1.0, predMat, predMat, 0.0, false, true);
+		
+		//Apply shrinkage
+		double alphaU [] =  new double[2];
+		if (this.SKMethod != SKMethodType.none) {
+			applyShrinkageToCovariance(ensembleVectors,predMat, D , alphaU,n, q, m, sqrtQmin1);
+		}else {
+			predMat.scale(Math.sqrt(1.0 / (q - 1.0)));
+			D.multiply(1.0,  predMat  , predMat, 0.0, false, true);
+		}
+		
+		// System.out.println("predMat="+predMat);
+
+		
 		IMatrix sqrtR = obs.getSqrtCovariance().asMatrix();
 		D.multiply(1.0, sqrtR, sqrtR, 1.0, false, true);
 		timerLinalg.stop();
@@ -386,7 +443,7 @@ public class EnKF extends AbstractSequentialEnsembleAlgorithm {
 		timerLinalg.start();
 		// K = XI*PRED'*inv(D) = XI * Xfac
 		for(int i=0;i<q;i++){
-			ensembleVectors.ensemble[i].scale(1.0/sqrtQmin1);
+			ensembleVectors.ensemble[i].scale(Math.sqrt(1-alphaU[0]) /sqrtQmin1);
 		}
 
 		// System.out.println("PHT="+K);
@@ -406,6 +463,10 @@ public class EnKF extends AbstractSequentialEnsembleAlgorithm {
 			for(int j=0;j<q;j++){
 				Kvecs[i].axpy(E.getValue(j, i),ensembleVectors.ensemble[j]);
 			}
+			if (this.SKMethod!=SKMethodType.none){
+				updateVectorKGainShrinkage(obs, Kvecs, inverseD  ,alphaU , i,  m);
+			}
+
 			timerLinalg.stop();
 			timerResults.start();
 			if (write_output){
@@ -415,7 +476,7 @@ public class EnKF extends AbstractSequentialEnsembleAlgorithm {
 		}
 
 		for(int i=0;i<q;i++){
-			ensembleVectors.ensemble[i].scale(sqrtQmin1);
+			ensembleVectors.ensemble[i].scale(sqrtQmin1/Math.sqrt(1-alphaU[0]));
 		}
 
 		if (compute_pred_a_linear){
