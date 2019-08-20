@@ -65,7 +65,7 @@ public abstract class AbstractSequentialEnsembleAlgorithm extends AbstractSequen
 	
 	
 	// Shrinkage covariance
-	protected enum SKMethodType{none,RBLW,OAS, LW}
+	protected enum SKMethodType{none,RBLW,OAS, LW, DS}
 	protected SKMethodType SKMethod=SKMethodType.none; 
 
 	//Smoothed gain matrix
@@ -113,6 +113,9 @@ public abstract class AbstractSequentialEnsembleAlgorithm extends AbstractSequen
 		}
 		else if (sK.equalsIgnoreCase("lw")){
 			this.SKMethod = SKMethodType.LW;
+		}
+		else if (sK.equalsIgnoreCase("ds")){
+			this.SKMethod = SKMethodType.DS;
 		}
 		else {
 			throw new RuntimeException("Shrinkage covariance estimator type '" + sK +  "' is not supported");
