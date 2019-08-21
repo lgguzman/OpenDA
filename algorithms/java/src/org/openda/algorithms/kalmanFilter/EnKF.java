@@ -356,7 +356,10 @@ public class EnKF extends AbstractSequentialEnsembleAlgorithm {
 	}
 
 	protected void applyShrinkageToCovariance(EnsembleVectors ensembleVectors,Matrix predMat, Matrix D ,double [] alphaU , int n, int q, int m, double sqrtQmin1){
-    	Matrix delta =  (new Matrix(ensembleVectors.ensemble));
+    	/*
+    	Applying methods proposed by Elias Nino and Luis Guzman.
+    	 */
+		Matrix delta =  (new Matrix(ensembleVectors.ensemble));
 		delta.scale(1/sqrtQmin1);
 		Matrix[] SVD = delta.svd();
 		double S2 = 0.0;
@@ -376,10 +379,33 @@ public class EnKF extends AbstractSequentialEnsembleAlgorithm {
 				break;
 			}
 			case LW:{
+				double suma=0;
+				for (int k=0;k<q;k++){
+					double norm=0;
+					for (int j=0;j<n;j++){
+						norm=norm + predMat.getValue(j,k)*predMat.getValue(j,k);
+					}
+					suma=suma + norm*norm;
+				}
+				alphaU[0] = Math.min((suma-(q-2)*S2)/((S2-(S*S)/n)*q*q),1);
 				break;
 			}
 			case RBLW:{
 				alphaU[0] = Math.min((((q-2)/q)*S2+ S*S)/((q+2)*(S2-(S*S)/n)), 1);
+				break;
+			}
+			case DS: {
+				double u = S/n;
+				int cont = 0;
+				while (cont <= q &&  SVD[1].getValue(cont, cont) > u ){
+					cont = cont+1;
+				}
+				if (cont/n < 0.2){
+					alphaU[0] = Math.min(((1 - 2 / n) * S2 + S * S) / ((q + 1 - 2 / n) * (S2 - (S * S) / n)), 1);
+				}else{
+					alphaU[0] = Math.min((((q-2)/q)*S2+ S*S)/((q+2)*(S2-(S*S)/n)), 1);
+				}
+
 				break;
 			}
 		}
