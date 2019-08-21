@@ -111,6 +111,7 @@ public class EnKFShrinkage extends EnKF {
 		}
 	}
 
+	@Override
 	protected IVector[] computeGainMatrix(IStochObserver obs, EnsembleVectors ensemblePredictions, EnsembleVectors ensembleVectors, boolean compute_pred_a_linear, boolean write_output){
 		int m = obs.getCount(); // number of observations
 		int n = ensembleVectors.mean.getSize(); // length of the state vector
