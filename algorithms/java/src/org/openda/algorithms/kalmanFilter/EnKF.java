@@ -371,7 +371,7 @@ public class EnKF extends AbstractSequentialEnsembleAlgorithm {
 			S2 = S2 + tempS;
 		}
 
-		alphaU[1] = Math.max(0.15,(1+S)/n);
+		alphaU[1] = (1+S)/n; // Math.max(0.15,(1+S)/n);
 
 		switch (this.SKMethod){
 			case OAS:{
@@ -383,7 +383,7 @@ public class EnKF extends AbstractSequentialEnsembleAlgorithm {
 				for (int k=0;k<q;k++){
 					double norm=0;
 					for (int j=0;j<n;j++){
-						norm=norm + predMat.getValue(j,k)*predMat.getValue(j,k);
+						norm=norm + delta.getValue(j,k)*delta.getValue(j,k);
 					}
 					suma=suma + norm*norm;
 				}
@@ -422,6 +422,8 @@ public class EnKF extends AbstractSequentialEnsembleAlgorithm {
 		if(obsIndex==null){
 			obsIndex = descr.getValueProperties("xPosition");
 		}
+//		System.out.println("alpha" +  alphaU[0]);
+//		System.out.println("mu" +    alphaU[1]);
 		for(int j=0;j<m;j++) {
 			int indx = (int) obsIndex.getValue(j);
 			Kvecs[i].setValue(indx, Kvecs[i].getValue(indx) + alphaU[0] * alphaU[1] * inverseD.getValue(j, i));
